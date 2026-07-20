@@ -1,44 +1,40 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { motion } from "framer-motion";
+import { useParams, useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 import { 
   ArrowLeft, 
-  Brain, 
-  ExternalLink, 
   Trash2, 
-  Sparkles, 
-  MessageCircle,
   Clock,
-  Tag,
-  Share2,
-  Trash,
-  Save,
   Pencil,
+  Globe,
+  Database,
+  Layers,
+  ChevronDown,
+  ChevronUp,
+  BookOpen,
   X,
-  CheckCircle2
+  Loader2
 } from "lucide-react";
+import ContentCard from "@/components/ContentCard";
 
 export default function ContentDetailPage() {
   const { id } = useParams();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [item, setItem] = useState<any>(null);
+  const [relatedItems, setRelatedItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  
   const [editManual, setEditManual] = useState(false);
   const [manualDraft, setManualDraft] = useState("");
-  const [editBody, setEditBody] = useState(false);
-  const [bodyDraft, setBodyDraft] = useState("");
   const [editTitle, setEditTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
 
-  const [practiceOpen, setPracticeOpen] = useState(false);
-  const [qIndex, setQIndex] = useState(0);
-  const [answerDraft, setAnswerDraft] = useState("");
-  const [reviewSubmitting, setReviewSubmitting] = useState(false);
-  const [reviewMsg, setReviewMsg] = useState("");
+  const [revealedQuestions, setRevealedQuestions] = useState<Record<number, boolean>>({});
 
   const fetchDetail = async () => {
     try {
@@ -46,8 +42,8 @@ export default function ContentDetailPage() {
       const data = await res.json();
       if (data.success) {
         setItem(data.data.item);
+        setRelatedItems(data.data.related || []);
         setManualDraft(data.data.item.manualNote || "");
-        setBodyDraft(data.data.item.rawContent || "");
         setTitleDraft(data.data.item.title || "");
       }
     } catch (err) {
@@ -77,485 +73,362 @@ export default function ContentDetailPage() {
     }
   };
 
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      const res = await fetch(`/api/content/${id}`, { method: "DELETE" });
+      if (res.ok) router.push("/library");
+      else alert("Delete failed");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to delete");
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteModal(false);
+    }
+  };
+
   useEffect(() => {
     fetchDetail();
   }, [id]);
 
-  useEffect(() => {
-    if (searchParams.get("review") === "1") {
-      setPracticeOpen(true);
-    }
-  }, [searchParams]);
-
-  const submitReview = async (result: "easy" | "good" | "hard" | "forgot") => {
-    if (!id) return;
-    setReviewSubmitting(true);
-    setReviewMsg("");
-    try {
-      const res = await fetch("/api/review/submit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contentId: id, result }),
-      });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error || "Failed to submit review");
-      setReviewMsg("Review saved");
-      // Move to next question
-      setAnswerDraft("");
-      setQIndex((i) => i + 1);
-    } catch (err: any) {
-      setReviewMsg(err.message || "Failed to submit review");
-    } finally {
-      setReviewSubmitting(false);
-    }
+  const toggleRevealQuestion = (idx: number) => {
+    setRevealedQuestions(prev => ({ ...prev, [idx]: !prev[idx] }));
   };
 
   if (loading) return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
-      <div className="w-12 h-12 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin" />
-      <span className="text-xs font-black text-slate-500 uppercase tracking-widest">Hydrating Memory...</span>
+    <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4 select-none">
+      <div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
+      <span className="text-[10px] font-bold text-text-muted uppercase tracking-[0.25em]">Loading...</span>
     </div>
   );
 
   if (!item) return (
-    <div className="text-center py-20 bg-slate-900/50 rounded-[3rem] border border-slate-800 border-dashed">
-       <div className="text-4xl mb-4">🚫</div>
-       <h2 className="text-2xl font-black text-white">Insight Not Found</h2>
-       <button onClick={() => router.back()} className="mt-6 btn-ghost">Go Back</button>
+    <div className="border border-dashed border-border p-12 rounded-xl flex flex-col items-center justify-center text-center space-y-4 max-w-md mx-auto select-none mt-10">
+       <div className="w-12 h-12 rounded-full bg-error-muted border border-error/15 flex items-center justify-center text-error">
+          <Database className="w-5 h-5" />
+       </div>
+       <div className="space-y-1">
+          <h2 className="text-base font-bold text-text-primary tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>Item Not Found</h2>
+          <p className="text-[12px] text-text-secondary leading-normal">This item may have been deleted or doesn't exist.</p>
+       </div>
+       <button onClick={() => router.push("/library")} className="btn-primary h-9 px-4 text-xs tracking-wider flex items-center gap-1.5 cursor-pointer mt-2">
+          <ArrowLeft className="w-3.5 h-3.5" /> Back to Library
+       </button>
     </div>
   );
 
   return (
-    <div className="max-w-4xl mx-auto space-y-10 pb-20">
-      {/* Navigation */}
-      <nav className="flex items-center justify-between">
-        <button 
-          onClick={() => router.back()}
-          className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white transition-all hover:bg-slate-800"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        
-        <div className="flex items-center gap-3">
-           <button className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-indigo-400 transition-all">
-              <Share2 className="w-5 h-5" />
-           </button>
-           <button className="p-3 rounded-xl bg-slate-900 border border-red-500/20 text-red-500/60 hover:text-red-500 hover:bg-red-500/5 transition-all">
-              <Trash2 className="w-5 h-5" />
-           </button>
-        </div>
-      </nav>
+    <>
+      <div className="max-w-3xl mx-auto space-y-8 pt-24 sm:pt-28 pb-16 px-4 sm:px-6 md:px-8 page-transition">
+        {/* Top Controls Header */}
+        <nav className="flex items-center justify-between border-b border-border pb-4 select-none">
+          <button 
+            onClick={() => router.back()}
+            className="p-1.5 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-elevated active:scale-95 transition-all cursor-pointer"
+            aria-label="Go back"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+          
+          <div className="flex items-center gap-2">
+             <button 
+               onClick={() => setShowDeleteModal(true)}
+               className="p-1.5 rounded-md text-text-muted hover:text-error hover:bg-error-muted active:scale-95 transition-all cursor-pointer"
+               aria-label="Delete item"
+             >
+                <Trash2 className="w-4 h-4" />
+             </button>
+          </div>
+        </nav>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-        {/* Main Content */}
-        <div className="lg:col-span-8 space-y-10">
-          <header className="space-y-4">
-            <div className="flex flex-wrap gap-3">
-              <span className="px-3 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-[10px] font-black text-indigo-400 uppercase tracking-widest leading-none">
-                {item.category}
+        {/* Main Reading column */}
+        <div className="space-y-10">
+          
+          {/* Header Section */}
+          <div className="space-y-4">
+            {/* Badges */}
+            <div className="flex flex-wrap gap-2 select-none">
+              <span className="badge-warm">
+                <Layers className="w-3 h-3" /> {item.category || "General"}
               </span>
-              <span className="px-3 py-1 bg-slate-800 border border-slate-700 rounded-full text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">
-                {item.sourcePlatform || item.type}
+              <span className="px-3 py-1 bg-bg-root border border-border rounded-full text-[10px] font-bold text-text-secondary uppercase tracking-wider flex items-center gap-1.5">
+                <Globe className="w-3 h-3" /> {item.sourcePlatform || item.type}
               </span>
             </div>
-            <h1 className="text-4xl md:text-5xl font-black text-white leading-tight">{item.title}</h1>
-            <div className="flex items-center gap-6 text-slate-500">
-               <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider">
-                  <Clock className="w-4 h-4" /> Captured {new Date(item.createdAt).toLocaleDateString()}
+
+            {/* Dynamic Title with Edit Option */}
+            <div className="relative group">
+              {editTitle ? (
+                <div className="space-y-3">
+                   <input
+                    className="w-full text-xl md:text-2xl font-bold pb-2 bg-transparent border-b border-primary text-text-primary focus:outline-none"
+                    style={{ fontFamily: 'var(--font-display)' }}
+                    value={titleDraft}
+                    onChange={(e) => setTitleDraft(e.target.value)}
+                    maxLength={200}
+                    autoFocus
+                  />
+                  <div className="flex gap-2 select-none">
+                    <button onClick={async () => (await updateItem({ title: titleDraft })) && setEditTitle(false)} className="btn-primary h-8 px-4 text-[11px] uppercase font-bold cursor-pointer">Save</button>
+                    <button onClick={() => { setEditTitle(false); setTitleDraft(item.title); }} className="btn-ghost h-8 px-4 text-[11px] uppercase font-bold cursor-pointer">Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-start justify-between gap-4">
+                  <h1 className="text-2xl md:text-3xl font-bold text-text-primary tracking-tight leading-snug" style={{ fontFamily: 'var(--font-display)' }}>
+                    {item.title}
+                  </h1>
+                  <button 
+                    onClick={() => setEditTitle(true)} 
+                    className="p-1.5 rounded-md opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity text-text-muted hover:text-text-primary hover:bg-bg-elevated cursor-pointer shrink-0 mt-1"
+                    aria-label="Edit title"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Date and Source */}
+            <div className="flex flex-wrap items-center gap-6 text-[11px] text-text-muted select-none border-b border-border pb-6">
+               <div className="flex items-center gap-1.5 font-medium uppercase tracking-wider">
+                  <Clock className="w-3.5 h-3.5 text-primary-light" /> {(() => {
+                    if (!item.createdAt) return "Just now";
+                    const d = new Date(item.createdAt);
+                    return isNaN(d.getTime()) ? "Just now" : d.toLocaleDateString("en-US", { year: 'numeric', month: 'long', day: 'numeric' });
+                  })()}
                </div>
                {item.sourceUrl && (
                  <a 
                    href={item.sourceUrl} 
                    target="_blank" 
                    rel="noopener noreferrer"
-                   className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-indigo-400 hover:text-indigo-300 transition-colors"
+                   className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-text-secondary hover:text-text-primary transition-all underline underline-offset-4 decoration-border-strong hover:decoration-text-secondary"
                  >
-                   Open Source <ExternalLink className="w-4 h-4" />
+                   View Source
                  </a>
                )}
             </div>
-          </header>
+          </div>
 
-          <section className="glass p-8 md:p-10 rounded-[2.5rem] border border-slate-800 shadow-2xl space-y-8 relative overflow-hidden">
-             <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 blur-3xl pointer-events-none" />
-             
-             {/* Manual Note */}
-             <div className="space-y-4">
-               <div className="flex items-center justify-between gap-4">
-                 <h2 className="text-xl font-black flex items-center gap-3 text-white">
-                   <Pencil className="w-5 h-5 text-emerald-400" /> Manual Note
-                 </h2>
-                 <div className="flex items-center gap-2">
+          {/* Personal Notes */}
+          <section className="relative group">
+             <div className="p-6 rounded-xl bg-bg-surface border border-border flex flex-col gap-4 relative overflow-hidden transition-colors hover:border-border-hover">
+                <div className="absolute top-0 left-0 w-[3px] h-full bg-primary" />
+                
+                <div className="flex items-center justify-between select-none">
+                   <div className="text-[11px] font-bold text-primary uppercase tracking-widest flex items-center gap-2">
+                      <Pencil className="w-3.5 h-3.5" /> Personal Notes
+                   </div>
+                   
                    {!editManual ? (
-                     <button
-                       onClick={() => setEditManual(true)}
-                       className="px-3 h-9 rounded-xl border border-slate-800 bg-slate-900/40 text-slate-300 text-xs font-black uppercase tracking-widest hover:border-slate-700"
-                     >
-                       Edit
-                     </button>
+                      <button 
+                        onClick={() => setEditManual(true)} 
+                        className="p-1.5 hover:bg-bg-elevated rounded-md text-text-muted hover:text-text-primary transition-colors cursor-pointer"
+                        aria-label="Edit notes"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
                    ) : (
-                     <>
-                       <button
-                         onClick={async () => {
-                           const ok = await updateItem({ manualNote: manualDraft });
-                           if (ok) setEditManual(false);
-                         }}
-                         disabled={saving}
-                         className="px-3 h-9 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-xs font-black uppercase tracking-widest disabled:opacity-50"
-                       >
-                         <Save className="w-4 h-4 inline-block mr-2" />
-                         Save
-                       </button>
-                       <button
-                         onClick={() => {
-                           setManualDraft(item.manualNote || "");
-                           setEditManual(false);
-                         }}
-                         className="px-3 h-9 rounded-xl border border-slate-800 bg-slate-900/40 text-slate-400 text-xs font-black uppercase tracking-widest hover:border-slate-700"
-                       >
-                         <X className="w-4 h-4 inline-block mr-2" />
-                         Cancel
-                       </button>
-                     </>
+                      <div className="flex gap-2 select-none">
+                        <button onClick={async () => (await updateItem({ manualNote: manualDraft })) && setEditManual(false)} className="px-3 py-1.5 bg-primary text-bg-root rounded-md text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:bg-accent-end transition-colors">Save</button>
+                        <button onClick={() => { setEditManual(false); setManualDraft(item.manualNote || ""); }} className="px-3 py-1.5 bg-bg-elevated rounded-md text-[10px] font-bold uppercase tracking-wider text-text-secondary hover:text-text-primary transition-colors cursor-pointer">Cancel</button>
+                      </div>
                    )}
-                   <button
-                     onClick={async () => {
-                       setManualDraft("");
-                       const ok = await updateItem({ manualNote: "" });
-                       if (ok) setEditManual(false);
-                     }}
-                     disabled={saving}
-                     className="px-3 h-9 rounded-xl border border-red-500/20 bg-red-500/5 text-red-300/80 text-xs font-black uppercase tracking-widest disabled:opacity-50"
-                   >
-                     Delete
-                   </button>
-                 </div>
-               </div>
-
-               {editManual ? (
-                 <textarea
-                   className="input-base w-full min-h-[120px] p-4 bg-slate-900/50 border-slate-800 focus:border-emerald-400 text-white placeholder-slate-600 resize-none"
-                   value={manualDraft}
-                   onChange={(e) => setManualDraft(e.target.value)}
-                   maxLength={2000}
-                   disabled={saving}
-                   placeholder="Write your manual note..."
-                 />
-               ) : (
-                 <div className="text-slate-300 leading-relaxed font-medium whitespace-pre-wrap">
-                   {item.manualNote?.trim()?.length ? item.manualNote : "No manual note yet."}
-                 </div>
-               )}
-             </div>
-
-             <div className="pt-8 border-t border-slate-800/70" />
-
-             <div className="space-y-4">
-                <h2 className="text-xl font-black flex items-center gap-3 text-white">
-                   <Sparkles className="w-5 h-5 text-indigo-400" /> AI Executive Summary
-                </h2>
-                <div className="text-slate-300 leading-relaxed font-medium text-lg whitespace-pre-wrap">
-                  {item.summary || "This item is still being analyzed. Please check back in a moment."}
                 </div>
-             </div>
 
-             <div className="pt-8 border-t border-slate-800 space-y-6">
-                <h3 className="text-sm font-black text-slate-500 uppercase tracking-[0.2em] flex items-center gap-2">
-                   <Tag className="w-4 h-4" /> Intellectual Labels
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                   {item.tags?.map((tag: string) => (
-                     <span key={tag} className="px-4 py-2 bg-slate-900 border border-slate-800 rounded-2xl text-[11px] font-black text-slate-400 uppercase tracking-widest">
-                       #{tag}
-                     </span>
-                   ))}
-                </div>
+                {editManual ? (
+                   <textarea
+                    className="input-premium w-full min-h-[120px] text-[13px] leading-relaxed font-medium bg-bg-input"
+                    value={manualDraft}
+                    onChange={(e) => setManualDraft(e.target.value)}
+                    maxLength={2000}
+                    placeholder="Add your own notes, context, or takeaways here..."
+                  />
+                ) : (
+                   <div className="text-[14px] text-text-primary leading-relaxed font-medium italic opacity-95">
+                    &ldquo;{item.manualNote?.trim()?.length ? item.manualNote : "Tap the pencil icon to add your own notes or takeaways."}&rdquo;
+                  </div>
+                )}
              </div>
           </section>
 
-          {/* Personal note body editor */}
-          {item.type === "note" && (
-            <section className="glass p-8 md:p-10 rounded-[2.5rem] border border-slate-800 shadow-2xl space-y-6">
-              <div className="flex items-center justify-between gap-4">
-                <h2 className="text-xl font-black flex items-center gap-3 text-white">
-                  <Pencil className="w-5 h-5 text-indigo-300" /> Personal Note
-                </h2>
-                <div className="flex items-center gap-2">
-                  {!editTitle ? (
-                    <button
-                      onClick={() => setEditTitle(true)}
-                      className="px-3 h-9 rounded-xl border border-slate-800 bg-slate-900/40 text-slate-300 text-xs font-black uppercase tracking-widest hover:border-slate-700"
-                    >
-                      Title
-                    </button>
-                  ) : (
-                    <>
-                      <button
-                        onClick={async () => {
-                          const ok = await updateItem({ title: titleDraft });
-                          if (ok) setEditTitle(false);
-                        }}
-                        disabled={saving}
-                        className="px-3 h-9 rounded-xl border border-indigo-500/30 bg-indigo-500/10 text-indigo-200 text-xs font-black uppercase tracking-widest disabled:opacity-50"
-                      >
-                        <Save className="w-4 h-4 inline-block mr-2" />
-                        Save
-                      </button>
-                      <button
-                        onClick={() => {
-                          setTitleDraft(item.title || "");
-                          setEditTitle(false);
-                        }}
-                        className="px-3 h-9 rounded-xl border border-slate-800 bg-slate-900/40 text-slate-400 text-xs font-black uppercase tracking-widest hover:border-slate-700"
-                      >
-                        <X className="w-4 h-4 inline-block mr-2" />
-                        Cancel
-                      </button>
-                    </>
-                  )}
-
-                  {!editBody ? (
-                    <button
-                      onClick={() => setEditBody(true)}
-                      className="px-3 h-9 rounded-xl border border-slate-800 bg-slate-900/40 text-slate-300 text-xs font-black uppercase tracking-widest hover:border-slate-700"
-                    >
-                      Body
-                    </button>
-                  ) : (
-                    <>
-                      <button
-                        onClick={async () => {
-                          const ok = await updateItem({ rawContent: bodyDraft });
-                          if (ok) setEditBody(false);
-                        }}
-                        disabled={saving}
-                        className="px-3 h-9 rounded-xl border border-indigo-500/30 bg-indigo-500/10 text-indigo-200 text-xs font-black uppercase tracking-widest disabled:opacity-50"
-                      >
-                        <Save className="w-4 h-4 inline-block mr-2" />
-                        Save
-                      </button>
-                      <button
-                        onClick={() => {
-                          setBodyDraft(item.rawContent || "");
-                          setEditBody(false);
-                        }}
-                        className="px-3 h-9 rounded-xl border border-slate-800 bg-slate-900/40 text-slate-400 text-xs font-black uppercase tracking-widest hover:border-slate-700"
-                      >
-                        <X className="w-4 h-4 inline-block mr-2" />
-                        Cancel
-                      </button>
-                    </>
-                  )}
-                </div>
+          {/* AI Summary Section */}
+          <section className="space-y-4">
+              <div className="flex items-center gap-2.5 select-none">
+                
+                <h2 className="text-[18px] font-bold text-text-primary tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>Summary</h2>
               </div>
+              
+              <div className="p-6 rounded-xl bg-bg-surface border border-border">
+                 <p className="text-[14px] text-text-secondary leading-relaxed font-medium">
+                   {item.summary || (item.processingStatus === "processing" ? "Generating summary..." : "No summary available.")}
+                 </p>
+              </div>
+          </section>
 
-              {editTitle ? (
-                <input
-                  className="input-base w-full h-12 px-4 bg-slate-900/50 border-slate-800 focus:border-indigo-400 text-white placeholder-slate-600"
-                  value={titleDraft}
-                  onChange={(e) => setTitleDraft(e.target.value)}
-                  maxLength={200}
-                  disabled={saving}
-                  placeholder="Title..."
-                />
-              ) : (
-                <div className="text-sm font-black text-slate-400 uppercase tracking-widest">
-                  {item.title}
-                </div>
-              )}
-
-              {editBody ? (
-                <textarea
-                  className="input-base w-full min-h-[220px] p-4 bg-slate-900/50 border-slate-800 focus:border-indigo-400 text-white placeholder-slate-600 resize-none"
-                  value={bodyDraft}
-                  onChange={(e) => setBodyDraft(e.target.value)}
-                  maxLength={10000}
-                  disabled={saving}
-                  placeholder="Write your note..."
-                />
-              ) : (
-                <div className="text-slate-300 leading-relaxed font-medium whitespace-pre-wrap">
-                  {item.rawContent}
-                </div>
-              )}
+          {/* Original Content */}
+          {item.rawContent && item.type === "link" && (
+            <section className="space-y-4">
+               <div className="flex items-center gap-2.5 select-none">
+                  <div className="w-8 h-8 rounded-lg bg-bg-surface border border-border flex items-center justify-center">
+                     <BookOpen className="w-4 h-4 text-text-muted" />
+                  </div>
+                  <h2 className="text-[18px] font-bold text-text-primary tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>Original Content</h2>
+               </div>
+               <div className="p-6 rounded-xl bg-bg-surface border border-border max-h-[300px] overflow-y-auto custom-scrollbar">
+                  <p className="text-[13px] text-text-secondary leading-relaxed whitespace-pre-wrap font-medium">
+                     {item.rawContent}
+                  </p>
+               </div>
             </section>
           )}
 
-          {/* AI Questions */}
+          {/* Flashcards */}
           {item.aiQuestions?.length > 0 && (
-            <section className="space-y-6">
-               <h2 className="text-xl font-black flex items-center gap-3 text-white">
-                  <MessageCircle className="w-6 h-6 text-purple-400" /> Critical Recall Questions
-               </h2>
-               <div className="grid grid-cols-1 gap-4">
-                  {item.aiQuestions.map((q: string, i: number) => (
-                    <motion.div 
-                      key={i}
-                      whileHover={{ x: 5 }}
-                      className="glass p-6 rounded-3xl border border-slate-800/80 bg-slate-900/40 relative overflow-hidden group"
-                    >
-                       <div className="absolute left-0 top-0 w-1 h-full bg-indigo-500/20 group-hover:bg-indigo-500 transition-colors" />
-                       <p className="text-slate-300 font-bold leading-relaxed">{q}</p>
-                    </motion.div>
+             <section className="space-y-5">
+                <div className="space-y-1.5 select-none">
+                  <div className="text-[11px] font-bold text-primary uppercase tracking-widest flex items-center gap-2">
+                      Study Cards
+                  </div>
+                  <h2 className="text-[18px] font-bold text-text-primary tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>Review these concepts</h2>
+                </div>
+                
+                <div className="space-y-4">
+                   {item.aiQuestions.map((q: any, i: number) => {
+                     const questionText = typeof q === 'string' ? q : q.question;
+                     const answerText = typeof q === 'object' ? q.answer : null;
+                     const isRevealed = !!revealedQuestions[i];
+                     
+                     return (
+                       <div 
+                         key={i}
+                         className="p-6 rounded-xl bg-bg-surface border border-border flex flex-col gap-4 transition-all duration-200 hover:border-border-hover"
+                       >
+                          <div className="flex items-start gap-4">
+                            <div className="w-7 h-7 rounded-lg bg-bg-elevated border border-border flex items-center justify-center shrink-0 text-[11px] font-bold text-text-muted">
+                              {i+1}
+                            </div>
+                            <div className="flex-1 mt-0.5">
+                               <p className="text-[14px] font-bold text-text-primary leading-normal">{questionText}</p>
+                            </div>
+                          </div>
+
+                          {answerText && (
+                            <div className="pt-3 flex flex-col gap-3 border-t border-border mt-2 select-none">
+                              <button
+                                onClick={() => toggleRevealQuestion(i)}
+                                className="self-start text-[11px] font-bold uppercase tracking-wider text-primary hover:text-primary-light flex items-center gap-1.5 transition-colors cursor-pointer"
+                              >
+                                {isRevealed ? (
+                                  <>Hide Answer <ChevronUp className="w-4 h-4" /></>
+                                ) : (
+                                  <>Reveal Answer <ChevronDown className="w-4 h-4" /></>
+                                )}
+                              </button>
+
+                              <AnimatePresence initial={false}>
+                                {isRevealed && (
+                                  <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: "auto", opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    transition={{ duration: 0.2, ease: "easeOut" }}
+                                    className="overflow-hidden"
+                                  >
+                                    <p className="text-[13px] text-text-secondary leading-relaxed bg-bg-elevated p-4 rounded-lg border border-border mt-2 font-medium select-text">
+                                      {answerText}
+                                    </p>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </div>
+                          )}
+                       </div>
+                     );
+                   })}
+                </div>
+             </section>
+          )}
+
+          {/* Tags */}
+          {item.tags?.length > 0 && (
+            <section className="pt-6 border-t border-border select-none">
+               <div className="flex flex-wrap gap-2">
+                  {item.tags?.map((tag: string) => (
+                    <span key={tag} className="px-3 py-1 bg-bg-surface border border-border rounded-md text-[10px] font-bold text-text-secondary uppercase tracking-wider">
+                      #{tag}
+                    </span>
                   ))}
                </div>
             </section>
           )}
 
-          {/* Recall Practice */}
-          {practiceOpen && (
-            <section className="glass p-8 md:p-10 rounded-[2.5rem] border border-slate-800 shadow-2xl space-y-6">
-              <div className="flex items-start justify-between gap-4">
-                <div className="space-y-1">
-                  <h2 className="text-xl font-black flex items-center gap-3 text-white">
-                    <Brain className="w-6 h-6 text-indigo-400" /> Recall Practice
-                  </h2>
-                  <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">
-                    Use the question, answer from memory, then self-grade
-                  </div>
-                </div>
-                <button
-                  onClick={() => setPracticeOpen(false)}
-                  className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white transition-all"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+          {/* Related Content */}
+          {relatedItems.length > 0 && (
+            <section className="space-y-5 pt-10 border-t border-border">
+              <h3 className="text-[12px] font-bold text-text-primary uppercase tracking-[0.15em] select-none">
+                Related Items
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                {relatedItems.map((relItem: any) => (
+                  <ContentCard key={relItem._id} item={relItem} />
+                ))}
               </div>
-
-              {reviewMsg && (
-                <div
-                  className={`px-4 py-3 rounded-2xl border text-sm font-bold ${
-                    reviewMsg === "Review saved"
-                      ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                      : "bg-red-500/10 border-red-500/20 text-red-400"
-                  }`}
-                >
-                  {reviewMsg}
-                </div>
-              )}
-
-              {item.aiQuestions?.length ? (
-                qIndex >= item.aiQuestions.length ? (
-                  <div className="p-6 rounded-3xl border border-slate-800 bg-slate-900/40 space-y-3">
-                    <div className="flex items-center gap-2 text-emerald-400 font-black">
-                      <CheckCircle2 className="w-5 h-5" /> Session complete
-                    </div>
-                    <div className="text-slate-400 font-medium">
-                      You’ve gone through all AI questions for this item.
-                    </div>
-                    <button
-                      onClick={() => {
-                        setQIndex(0);
-                        setAnswerDraft("");
-                      }}
-                      className="btn-ghost"
-                    >
-                      Restart
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <div className="p-6 rounded-3xl border border-slate-800 bg-slate-900/40 space-y-3">
-                      <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.25em]">
-                        Question {qIndex + 1} / {item.aiQuestions.length}
-                      </div>
-                      <div className="text-slate-200 font-black text-lg leading-snug">
-                        {item.aiQuestions[qIndex]}
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.25em]">
-                        Your answer (not saved)
-                      </div>
-                      <textarea
-                        className="input-base w-full min-h-[160px] p-4 bg-slate-900/50 border-slate-800 focus:border-indigo-400 text-white placeholder-slate-600 resize-none"
-                        value={answerDraft}
-                        onChange={(e) => setAnswerDraft(e.target.value)}
-                        placeholder="Type your answer from memory…"
-                        disabled={reviewSubmitting}
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                      <button
-                        onClick={() => submitReview("forgot")}
-                        disabled={reviewSubmitting}
-                        className="h-12 rounded-2xl border border-red-500/25 bg-red-500/5 text-red-300 font-black uppercase tracking-widest text-xs disabled:opacity-50"
-                      >
-                        Forgot
-                      </button>
-                      <button
-                        onClick={() => submitReview("hard")}
-                        disabled={reviewSubmitting}
-                        className="h-12 rounded-2xl border border-amber-500/25 bg-amber-500/5 text-amber-200 font-black uppercase tracking-widest text-xs disabled:opacity-50"
-                      >
-                        Hard
-                      </button>
-                      <button
-                        onClick={() => submitReview("good")}
-                        disabled={reviewSubmitting}
-                        className="h-12 rounded-2xl border border-indigo-500/25 bg-indigo-500/10 text-indigo-200 font-black uppercase tracking-widest text-xs disabled:opacity-50"
-                      >
-                        Good
-                      </button>
-                      <button
-                        onClick={() => submitReview("easy")}
-                        disabled={reviewSubmitting}
-                        className="h-12 rounded-2xl border border-emerald-500/25 bg-emerald-500/10 text-emerald-200 font-black uppercase tracking-widest text-xs disabled:opacity-50"
-                      >
-                        Easy
-                      </button>
-                    </div>
-                  </>
-                )
-              ) : (
-                <div className="text-slate-400 font-medium">
-                  No AI questions available yet for this item.
-                </div>
-              )}
             </section>
           )}
+
         </div>
-
-        {/* Sidebar info */}
-        <aside className="lg:col-span-4 space-y-8">
-           <div className="glass p-8 rounded-[2rem] border border-slate-800 space-y-6">
-              <div className="space-y-1 text-center pb-6 border-b border-slate-800">
-                 <div className="text-xs font-black text-slate-500 uppercase tracking-widest mb-1">Importance Score</div>
-                 <div className="text-5xl font-black text-indigo-500">{item.importanceScore}<span className="text-xl text-slate-700">/10</span></div>
-              </div>
-              
-              <div className="space-y-6">
-                 <div>
-                    <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Intelligence Metadata</div>
-                    <div className="space-y-3">
-                       <div className="flex items-center justify-between text-xs font-bold text-slate-400 bg-slate-900/50 p-3 rounded-xl border border-slate-800/40">
-                          <span className="text-slate-500">Status</span>
-                          <span className="text-emerald-500 uppercase tracking-widest">{item.status}</span>
-                       </div>
-                       <div className="flex items-center justify-between text-xs font-bold text-slate-400 bg-slate-900/50 p-3 rounded-xl border border-slate-800/40">
-                          <span className="text-slate-500">Duplicate Check</span>
-                          <span>{item.isDuplicate ? "Yes" : "Unique Memory"}</span>
-                       </div>
-                    </div>
-                 </div>
-
-                 <button
-                   onClick={() => {
-                     setPracticeOpen(true);
-                     setReviewMsg("");
-                     setQIndex(0);
-                     setAnswerDraft("");
-                   }}
-                   className="btn-primary w-full h-14 font-black flex items-center justify-center gap-3"
-                 >
-                    <Brain className="w-5 h-5" /> Start Recall Practice
-                 </button>
-              </div>
-           </div>
-        </aside>
       </div>
-    </div>
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {showDeleteModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="modal-overlay"
+            onClick={() => setShowDeleteModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.15 }}
+              className="modal-card"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-[16px] font-bold text-text-primary" style={{ fontFamily: 'var(--font-display)' }}>Delete this item?</h3>
+                <button onClick={() => setShowDeleteModal(false)} className="p-1 text-text-muted hover:text-text-primary transition-colors cursor-pointer">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <p className="text-[13px] text-text-secondary leading-relaxed mb-6 font-medium">
+                This will permanently remove <span className="text-text-primary">&ldquo;{item.title}&rdquo;</span>. This cannot be undone.
+              </p>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setShowDeleteModal(false)} 
+                  className="btn-ghost flex-1 h-10 text-[13px] cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  className="flex-1 h-10 rounded-lg bg-error text-white text-[13px] font-bold flex items-center justify-center gap-2 hover:bg-red-600 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  Delete
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }

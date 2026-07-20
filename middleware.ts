@@ -6,16 +6,31 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Define public routes that don't need auth
-  const isPublicRoute = pathname.startsWith('/login') || pathname.startsWith('/signup') || pathname.startsWith('/api/auth');
+  const isPublicRoute = 
+    pathname === '/' ||
+    pathname.startsWith('/login') || 
+    pathname.startsWith('/signup') || 
+    pathname.startsWith('/api/auth') ||
+    pathname.startsWith('/verify-email') ||
+    pathname.startsWith('/forgot-password') ||
+    pathname.startsWith('/reset-password');
 
-  // If there's no auth token and the user is trying to access a protected route or the root
+  // If there's no auth token and the user is trying to access a protected route
   if (!token && !isPublicRoute) {
-    const loginUrl = new URL('/signup', request.url);
+    if (pathname.startsWith('/api')) {
+      return NextResponse.next();
+    }
+    const loginUrl = new URL('/login', request.url);
     return NextResponse.redirect(loginUrl);
   }
 
   // If the user has a token and is trying to access auth pages
-  if (token && isPublicRoute) {
+  // Only redirect away from login/signup, NOT from forgot/reset password pages
+  const isLoginOrSignup = 
+    pathname.startsWith('/login') || 
+    pathname.startsWith('/signup');
+
+  if (token && isLoginOrSignup && !pathname.startsWith('/api')) {
     const dashboardUrl = new URL('/', request.url);
     return NextResponse.redirect(dashboardUrl);
   }
@@ -25,13 +40,7 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (except auth)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
+   
     '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 };

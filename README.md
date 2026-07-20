@@ -1,36 +1,79 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Recallify - AI Memory Engine
 
-## Getting Started
+A powerful, frictionless personal knowledge base that automatically extracts insights from your saved links and notes using AI. It uses spaced repetition and semantic search to help you build a lasting learning habit.
 
-First, run the development server:
+## ✨ Key Features
+- **Instant Knowledge Capture** — Save any link, article, or quick note in seconds.
+- **AI-Powered Insights** — Automatically generates summaries, extracts key tags, and categorizes content using AI (Gemini / Groq).
+- **Semantic Search** — Find related content and exact matches instantly using advanced vector embeddings.
+- **Spaced Repetition** — Automated email digests sent to your inbox when items are due for review, helping you retain knowledge forever.
+- **Beautiful & Dynamic UI** — A premium, smooth user experience built with Framer Motion and Tailwind CSS.
+- **Production Ready** — Fully dockerized with a highly optimized multi-stage build.
+
+## 🚀 Live Demo
+*(Add your live Vercel or deployment link here)* →
+
+## 🛠️ Tech Stack
+- **Frontend/Framework:** Next.js 14 (App Router) & React
+- **Backend/API:** Next.js Route Handlers
+- **Database:** MongoDB (Mongoose)
+- **AI & Embeddings:** Google Gemini API & Groq
+- **Email Delivery:** Nodemailer (Gmail integration)
+- **Styling & Animations:** Tailwind CSS & Framer Motion
+- **Deployment:** Docker (Standalone Optimized)
+
+## 🎯 Why Recallify?
+Most bookmarking apps become "read-it-later" graveyards. Recallify is designed not just to store information, but to actively help you learn it. By automatically summarizing articles and emailing you flashcards based on spaced repetition schedules, it turns passive saving into active learning without any extra effort on your part.
+
+## 🛠️ How It Works
+1. **Capture:** Paste a link or write a note on the Capture page.
+2. **AI Processing:** The background AI worker scrapes the content, generates a summary, assigns tags, and computes semantic embeddings.
+3. **Review:** The system schedules the item for review. 
+4. **Remind:** A background cron job checks for due items and sends a digest email directly to your inbox using Nodemailer.
+
+## 📌 Future Enhancements (Planned)
+- Custom AI prompts and extraction rules
+- Advanced analytics and learning streaks
+- Browser extension for 1-click capturing
+- Multi-user collaboration and shared folders
+
+## 🧑‍💻 Local Setup
 
 ```bash
+# 1. Clone the repository
+git clone https://github.com/yourusername/recallify.git
+cd recallify
+
+# 2. Install dependencies
+npm install
+
+# 3. Setup Environment Variables
+# Create a .env.local file in the root directory and add:
+MONGODB_URI=your_mongodb_connection_string
+GEMINI_API_KEY=your_gemini_api_key
+GROQ_API_KEY=your_groq_api_key
+JWT_SECRET=your_jwt_secret
+EMAIL_USER=your_gmail_address
+EMAIL_PASS=your_gmail_app_password
+CRON_SECRET=supersecret123
+APP_BASE_URL=http://localhost:3000
+
+# 4. Start the Development Server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 🐳 Docker Deployment
+This project includes a highly optimized, multi-stage Dockerfile for production.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+# Build the Docker image
+docker build -t recallify-app .
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+# Run the container locally
+docker run -p 3000:3000 --env-file .env.local recallify-app
+```
 
-## Learn More
+## 📄 License
+This project is open for learning and inspiration.
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Made with ❤️ by you

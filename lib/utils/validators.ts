@@ -12,9 +12,9 @@ export const loginSchema = z.object({
 });
 
 export const createContentSchema = z.object({
-  type: z.enum(["youtube", "instagram", "link", "note", "idea", "snippet"]),
+  type: z.enum(["youtube", "instagram", "link", "note", "idea", "snippet"]).default("link"),
   sourceUrl: z.string().url().optional(),
-  rawContent: z.string().min(1).max(10000),
+  rawContent: z.string().max(10000).optional(),
   title: z.string().max(200).optional(),
   manualNote: z.string().max(2000).optional(),
   runAI: z.boolean().optional(),

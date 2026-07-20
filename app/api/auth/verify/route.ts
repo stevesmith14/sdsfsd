@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db/mongoose";
 import User from "@/lib/db/models/User";
+import PendingUser from "@/lib/db/models/PendingUser";
 import { hashEmailVerificationToken } from "@/lib/auth/emailVerification";
 
 export async function GET(req: NextRequest) {
@@ -14,27 +15,38 @@ export async function GET(req: NextRequest) {
     const tokenHash = hashEmailVerificationToken(token);
     await connectDB();
 
-    const user = await User.findOne({
-      emailVerificationTokenHash: tokenHash,
-      emailVerificationExpiresAt: { $gt: new Date() },
+    const pendingUser = await PendingUser.findOne({
+      verificationTokenHash: tokenHash,
+      expiresAt: { $gt: new Date() },
     });
 
-    if (!user) {
+    if (!pendingUser) {
+      console.error("No pending user found for token hash or token expired.");
       return NextResponse.json(
         { success: false, error: "Invalid or expired verification token" },
         { status: 400 }
       );
     }
 
-    user.emailVerified = true;
-    user.emailVerificationTokenHash = null;
-    user.emailVerificationExpiresAt = null;
-    await user.save();
+    // Create the real user
+    const newUser = await User.create({
+      name: pendingUser.name,
+      email: pendingUser.email,
+      passwordHash: pendingUser.passwordHash,
+      emailVerified: true,
+    });
+
+    // Delete the pending record
+    const deleteResult = await PendingUser.deleteOne({ _id: pendingUser._id });
 
     return NextResponse.json({ success: true, message: "Email verified successfully" });
-  } catch (err) {
+  } catch (err: any) {
     console.error("GET /api/auth/verify error:", err);
-    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 });
+    console.error("Error details:", err.message);
+    return NextResponse.json(
+      { success: false, error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }
 

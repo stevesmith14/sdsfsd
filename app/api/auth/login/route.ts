@@ -22,17 +22,13 @@ export async function POST(req: NextRequest) {
         await connectDB();
 
             const user = await User.findOne({ email });
-    // Step 3: If user not found — return generic error
-    // IMPORTANT: Don't say "email not found" — that tells hackers which emails exist!
-    // Always say "Invalid email or password" for both wrong email AND wrong password
     if (!user) {
       return NextResponse.json(
         { success: false, error: "Invalid email or password" },
         { status: 401 }
       );
     }
-    // Step 4: Compare entered password with stored hash
-    // bcrypt.compare does this safely — returns true or false
+
     const isPasswordCorrect = await bcrypt.compare(password, user.passwordHash);
     if (!isPasswordCorrect) {
       return NextResponse.json(
@@ -47,13 +43,12 @@ export async function POST(req: NextRequest) {
         { status: 403 }
       );
     }
-    // Step 5: Create JWT token
     const token = signToken({
       userId: user._id.toString(),
       email: user.email,
       name: user.name,
     });
-    // Step 6: Send response with cookie
+
     const response = NextResponse.json(
       {
         success: true,
@@ -77,7 +72,7 @@ export async function POST(req: NextRequest) {
     });
     return response;
     }catch(err){
-        console.log("error in login route : ",err)
+        console.error("error in login route : ",err)
          return NextResponse.json(
       { success: false, error: "Internal server error" },
       { status: 500 }

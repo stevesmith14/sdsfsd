@@ -18,8 +18,17 @@ export async function GET() {
       success: true,
       data: {
         email: u.email,
-        preferences: u.preferences,
-        reminderSettings: u.reminderSettings,
+        preferences: {
+          defaultCategory: u.preferences?.defaultCategory || "General",
+          reminderTime: u.preferences?.reminderTime || "09:00",
+          timezone: u.preferences?.timezone || "Asia/Kolkata",
+          emailReminders: u.preferences?.emailReminders ?? false,
+        },
+        reminderSettings: {
+          enabled: u.reminderSettings?.enabled ?? true,
+          frequency: u.reminderSettings?.frequency || "daily",
+          lastReminderSentAt: u.reminderSettings?.lastReminderSentAt || null,
+        },
       },
     });
   } catch (err) {

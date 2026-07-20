@@ -18,7 +18,9 @@ export interface IUser extends Document{
     enabled: boolean;
     frequency: 'daily' | 'every 2 Days' | 'weekly';
     lastReminderSentAt: Date | null;
-  }
+  };
+  resetPasswordTokenHash: string | null;
+  resetPasswordExpiresAt: Date | null;
 }
 
 const UserSchema = new Schema<IUser>({
@@ -86,7 +88,15 @@ const UserSchema = new Schema<IUser>({
       type: Date,
       default: null
     },
-  }
+  },
+  resetPasswordTokenHash: {
+    type: String,
+    default: null,
+  },
+  resetPasswordExpiresAt: {
+    type: Date,
+    default: null,
+  },
 })
 
 export default mongoose.models.User || mongoose.model<IUser>('User',UserSchema)

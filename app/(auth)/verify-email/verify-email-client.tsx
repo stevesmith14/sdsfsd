@@ -25,7 +25,8 @@ export default function VerifyEmailClient({ token }: { token: string | null }) {
           setError(data?.error || "Verification failed");
         }
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error("Verification fetch error:", err);
         setStatus("error");
         setError("Verification failed");
       });

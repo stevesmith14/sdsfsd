@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { connectDB } from "@/lib/db/mongoose";
 import User from "@/lib/db/models/User";
+import PendingUser from "@/lib/db/models/PendingUser";
 import { signupSchema } from "@/lib/utils/validators";
 import { generateEmailVerificationToken } from "@/lib/auth/emailVerification";
-import { getAppBaseUrl, getResendClient } from "@/lib/email/resend";
+import { getAppBaseUrl, sendEmail } from "@/lib/email/resend";
 import { verificationEmailTemplate } from "@/lib/email/templates";
+
 
 export async function POST(req: NextRequest) {
   try {
@@ -40,25 +42,27 @@ export async function POST(req: NextRequest) {
     // 12 = "salt rounds" — higher = more secure but slower. 12 is the sweet spot.
     const passwordHash = await bcrypt.hash(password, 12);
 
-    // Step 6: Create the user in MongoDB
+    // Step 6: Create or update pending user
     const { token, tokenHash, expiresAt } = generateEmailVerificationToken();
-    const user = await User.create({
+    
+    // Check if there's already a pending signup for this email and remove it
+    await PendingUser.deleteOne({ email });
+
+    await PendingUser.create({
       name,
       email,
       passwordHash,
-      emailVerified: false,
-      emailVerificationTokenHash: tokenHash,
-      emailVerificationExpiresAt: expiresAt,
+      verificationTokenHash: tokenHash,
+      expiresAt: expiresAt,
     });
 
     // Step 7: Send verification email (account remains inactive until verified)
     const baseUrl = getAppBaseUrl();
     const verifyUrl = `${baseUrl}/verify-email?token=${token}`;
-    const tpl = verificationEmailTemplate({ name: user.name, verifyUrl });
-    const resend = getResendClient();
-    await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || "AI Memory Engine <onboarding@resend.dev>",
-      to: user.email,
+    const tpl = verificationEmailTemplate({ name, verifyUrl });
+    
+    await sendEmail({
+      to: email,
       subject: tpl.subject,
       html: tpl.html,
       text: tpl.text,
@@ -70,9 +74,8 @@ export async function POST(req: NextRequest) {
         success: true,
         data: {
           user: {
-            id: user._id.toString(),
-            name: user.name,
-            email: user.email,
+            name,
+            email,
           },
         },
         message: "Account created. Please verify your email to activate your account.",
@@ -83,7 +86,7 @@ export async function POST(req: NextRequest) {
     );
     return response;
   } catch (err) {
-    console.log("error in Post route of signup : ", err);
+    console.error("error in Post route of signup : ", err);
     return NextResponse.json(
       { success: false, error: "Internal server error" },
       { status: 500 },

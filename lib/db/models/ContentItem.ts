@@ -17,7 +17,7 @@ export interface IContentItem extends Document {
   status: 'active' | 'archived' | 'deleted';
   isPinned: boolean;
   importanceScore: number;
-  aiQuestions: string[];
+  aiQuestions: { question: string; answer: string }[];
   isDuplicate: boolean;
   processingStatus: 'pending' | 'processing' | 'done' | 'failed';
   createdAt: Date;
@@ -75,7 +75,12 @@ const ContentItemSchema = new Schema<IContentItem>({
     type: Number, 
     default: 5, min: 1, max: 10 
   },
-  aiQuestions: [String],
+  aiQuestions: [
+    {
+      question: String,
+      answer: String,
+    },
+  ],
   isDuplicate: { 
     type: Boolean, 
     default: false 

@@ -3,7 +3,7 @@ import { connectDB } from "@/lib/db/mongoose";
 import User from "@/lib/db/models/User";
 import ReviewState from "@/lib/db/models/ReviewState";
 import ContentItem from "@/lib/db/models/ContentItem";
-import { getAppBaseUrl, getResendClient } from "@/lib/email/resend";
+import { getAppBaseUrl, sendEmail } from "@/lib/email/resend";
 import { reminderDigestTemplate } from "@/lib/email/reminderTemplate";
 
 function isAllowed(req: NextRequest) {
@@ -23,6 +23,9 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    const { searchParams } = new URL(req.url);
+    const force = searchParams.get("force") === "true";
+
     await connectDB();
     const now = new Date();
 
@@ -35,15 +38,15 @@ export async function GET(req: NextRequest) {
       .lean();
 
     const baseUrl = getAppBaseUrl();
-    const resend = getResendClient();
-    const from = process.env.RESEND_FROM_EMAIL || "AI Memory Engine <onboarding@resend.dev>";
 
     let sent = 0;
     let skipped = 0;
+    const skipReasons: any = {};
 
     for (const u of users as any[]) {
-      if (isWithin24h(u?.reminderSettings?.lastReminderSentAt)) {
+      if (!force && isWithin24h(u?.reminderSettings?.lastReminderSentAt)) {
         skipped++;
+        skipReasons[u.email] = "Sent within 24h";
         continue;
       }
 
@@ -58,6 +61,7 @@ export async function GET(req: NextRequest) {
 
       if (dueStates.length === 0) {
         skipped++;
+        skipReasons[u.email] = "No due items";
         continue;
       }
 
@@ -84,13 +88,13 @@ export async function GET(req: NextRequest) {
 
       if (emailItems.length === 0) {
         skipped++;
+        skipReasons[u.email] = "No valid items found";
         continue;
       }
 
       const tpl = reminderDigestTemplate({ name: u.name, items: emailItems });
 
-      await resend.emails.send({
-        from,
+      await sendEmail({
         to: u.email,
         subject: tpl.subject,
         html: tpl.html,
@@ -105,7 +109,7 @@ export async function GET(req: NextRequest) {
       sent++;
     }
 
-    return NextResponse.json({ success: true, data: { sent, skipped } });
+    return NextResponse.json({ success: true, data: { sent, skipped, skipReasons } });
   } catch (err) {
     console.error("GET /api/cron/reminders error:", err);
     return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 });

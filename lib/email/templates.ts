@@ -27,3 +27,35 @@ export function verificationEmailTemplate(params: { name: string; verifyUrl: str
   };
 }
 
+
+export function resetPasswordEmailTemplate(params: { name: string; resetUrl: string }) {
+  const { name, resetUrl } = params;
+  const safeName = name?.trim() || "there";
+
+  return {
+    subject: "Reset your password for Antigravity",
+    html: `
+      <div style="font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; line-height: 1.5; color: #0f172a;">
+        <h2 style="margin: 0 0 12px;">Hi ${safeName},</h2>
+        <p style="margin: 0 0 12px;">
+          You requested a password reset for your Antigravity account.
+        </p>
+        <p style="margin: 0 0 16px;">
+          <a href="${resetUrl}" style="display:inline-block; background:#4f46e5; color:white; text-decoration:none; padding:10px 14px; border-radius:10px; font-weight:700;">
+            Reset Password
+          </a>
+        </p>
+        <p style="margin: 0 0 12px;">
+          This link will expire in 1 hour.
+        </p>
+        <p style="margin: 0 0 12px; color:#475569; font-size: 13px;">
+          If you didn’t request this, you can safely ignore this email.
+        </p>
+        <p style="margin: 0; color:#64748b; font-size: 12px;">
+          Antigravity Neural Engine
+        </p>
+      </div>
+    `,
+    text: `Reset your password: ${resetUrl}`,
+  };
+}

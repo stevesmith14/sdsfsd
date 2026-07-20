@@ -5,9 +5,6 @@ import { getGeminiModel, getEmbeddingModel } from "./gemini";
 import { buildProcessingPrompt } from "./prompts";
 import { groqGenerateJson } from "./groq";
 
-// ─── Cosine Similarity ───────────────────────────────────
-// Measures how similar two vectors (embeddings) are
-// Returns 1.0 = identical meaning, 0.0 = completely different
 function cosineSimilarity(a: number[], b: number[]): number {
 
       if (!a || !b || a.length !== b.length) return 0;
@@ -51,6 +48,53 @@ async function fetchUrlMetadata(
     };
   } catch {
     return {};  // If fetch fails, just return empty (AI will use rawContent)
+  }
+}
+
+// ─── Fetch YouTube Metadata ───────────────────────────────
+// Uses the official YouTube Data API (if available) or falls back to oEmbed
+async function fetchYouTubeMetadata(
+  url: string
+): Promise<{ title?: string; description?: string; image?: string }> {
+  try {
+    const videoIdMatch = url.match(/(?:v=|youtu\.be\/|youtube\.com\/embed\/)([^&?\/]+)/);
+    const videoId = videoIdMatch ? videoIdMatch[1] : null;
+
+    if (!videoId) return {};
+
+    // 1. Try YouTube Data API if key exists
+    if (process.env.YOUTUBE_API_KEY) {
+      const apiRes = await fetch(
+        `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=${process.env.YOUTUBE_API_KEY}`
+      );
+      if (apiRes.ok) {
+        const data = await apiRes.json();
+        if (data.items && data.items.length > 0) {
+          const snippet = data.items[0].snippet;
+          return {
+            title: snippet.title,
+            description: snippet.description,
+            image: snippet.thumbnails?.maxres?.url || snippet.thumbnails?.high?.url || snippet.thumbnails?.default?.url,
+          };
+        }
+      }
+    }
+
+    // 2. Fallback to oEmbed API (no key required, but no description)
+    const oembedRes = await fetch(`https://www.youtube.com/oembed?url=${url}&format=json`);
+    if (oembedRes.ok) {
+      const data = await oembedRes.json();
+      return {
+        title: data.title,
+        description: data.author_name ? `Video by ${data.author_name}` : undefined,
+        image: data.thumbnail_url,
+      };
+    }
+
+    return {};
+  } catch (err) {
+    console.error("YouTube metadata fetch failed:", err);
+    return {};
   }
 }
 
@@ -108,13 +152,35 @@ export async function processContent(contentId: string, userId: string) {
     let urlImage: string | undefined;
 
     if (content.sourceUrl) {
-      const meta = await fetchUrlMetadata(content.sourceUrl);
-      urlTitle = meta.title;
-      urlDescription = meta.description;
-      urlImage = meta.image;
+      let meta = {};
+      const platform = content.sourcePlatform?.toLowerCase() || "";
+      
+      if (platform.includes("youtube")) {
+        meta = await fetchYouTubeMetadata(content.sourceUrl);
+      } else {
+        meta = await fetchUrlMetadata(content.sourceUrl);
+      }
+      
+      urlTitle = (meta as any).title;
+      urlDescription = (meta as any).description;
+      urlImage = (meta as any).image;
     }
 
-    // Step 3: Build the AI prompt with all available context
+    // Step 3: Fetch existing taxonomy for consistency
+    const [existingCategories, existingSubcategories] = await Promise.all([
+      ContentItem.distinct("category", {
+        userId,
+        processingStatus: "done",
+        category: { $ne: "" },
+      }) as Promise<string[]>,
+      ContentItem.distinct("subcategory", {
+        userId,
+        processingStatus: "done",
+        subcategory: { $ne: "" },
+      }) as Promise<string[]>,
+    ]);
+
+    // Step 4: Build the AI prompt with all available context + existing taxonomy
     const prompt = buildProcessingPrompt({
       type: content.type,
       title: urlTitle || content.title,
@@ -122,18 +188,20 @@ export async function processContent(contentId: string, userId: string) {
       rawContent: content.rawContent,
       manualNote: content.manualNote,
       platform: content.sourcePlatform,
+      existingCategories,
+      existingSubcategories,
     });
 
-    // Step 4: Call AI (Gemini primary, Groq fallback) and parse JSON response
+    // Step 5: Call AI (Gemini primary, Groq fallback) and parse JSON response
     const aiData: any = await generateAiJson(prompt);
     if (!aiData) throw new Error("Empty AI response");
 
-    // Step 5: Generate embedding for semantic search
+    // Step 6: Generate embedding for semantic search
     // We embed the summary + tags for best semantic representation
     const textToEmbed = `${aiData.summary} ${aiData.tags?.join(" ")}`;
     const embedding = await generateEmbedding(textToEmbed);
 
-    // Step 6: Update the content item with AI results
+    // Step 7: Update the content item with AI results
     content.title = aiData.title || content.title;
     content.summary = aiData.summary || "";
     content.tags = aiData.tags || [];
@@ -148,7 +216,7 @@ export async function processContent(contentId: string, userId: string) {
     content.processingStatus = "done";
     await content.save();
 
-    // Step 7: Find related content using cosine similarity
+    // Step 8: Find related content using cosine similarity
     // Load all other content items from this user that have embeddings
     const allContent = await ContentItem.find({
       userId,
@@ -166,7 +234,7 @@ export async function processContent(contentId: string, userId: string) {
       .sort((a, b) => b.score - a.score)     // Sort by most similar first
       .slice(0, 5);                           // Keep top 5 related items
 
-    // Step 8: Save related content links
+    // Step 9: Save related content links
     if (similarities.length > 0) {
       await RelatedContent.findOneAndUpdate(
         { contentId },

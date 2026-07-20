@@ -7,12 +7,11 @@ export async function getAuthUser() {
     const cookieStore = await cookies();
     const token = cookieStore.get("auth_token")?.value;
     if (!token) {
-      console.log("token nhi mila bhai");
       return null;
     }
     return verifyToken(token);
   } catch (err) {
-    console.log("error in getAuthUser : ", err);
+    console.error("error in getAuthUser : ", err);
     return null;
   }
 }

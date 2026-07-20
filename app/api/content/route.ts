@@ -57,10 +57,22 @@ export async function GET(req:NextRequest) {
           if (category) {
             query.category = category
           }
+
+          const type = searchParams.get("type");
+          if (type) {
+            query.type = type;
+          }
           
     
     if (search && search.trim().length > 0) {
-      query.$text = { $search: search };
+      query.$or = [
+        { title: { $regex: search, $options: "i" } },
+        { summary: { $regex: search, $options: "i" } },
+        { tags: { $regex: search, $options: "i" } },
+        { category: { $regex: search, $options: "i" } },
+        { subcategory: { $regex: search, $options: "i" } },
+        { rawContent: { $regex: search, $options: "i" } }
+      ];
     }
 
     // 📄 Pagination
@@ -69,7 +81,7 @@ export async function GET(req:NextRequest) {
     // ⚡ DB queries
     const [items, total] = await Promise.all([
       ContentItem.find(query)
-        .sort(search ? { score: { $meta: "textScore" } } : sort)
+        .sort(sort)
         .skip(skip)
         .limit(limit)
         .lean(),
@@ -113,7 +125,8 @@ try{
         return NextResponse.json({ success: false,error: parsed.error.issues[0].message},{status: 400})
     }
 
-    const { type, sourceUrl, rawContent, manualNote, runAI } = parsed.data
+    const { type, sourceUrl, manualNote, runAI } = parsed.data
+    const rawContent = parsed.data.rawContent || sourceUrl || "";
 
     if (!rawContent || rawContent.trim().length===0) {
         return NextResponse.json({
@@ -140,8 +153,15 @@ try{
     let thumbnailUrl: string | undefined;
     if (sourceUrl) {
         detectedType = detectContentType(sourceUrl) as any;
-
         sourcePlatform = detectPlatform(sourceUrl)
+
+        if (sourcePlatform !== "YouTube" && sourcePlatform !== "Instagram") {
+            return NextResponse.json({
+                success: false,
+                error: "Only YouTube and Instagram links are supported at this time"
+            }, { status: 400 });
+        }
+
         thumbnailUrl = getThumbnailUrl(sourceUrl, sourcePlatform);
     }
 
@@ -172,10 +192,8 @@ await ReviewState.create({
     });
 
     if (runAI !== false) {
-      waitUntil(
-        processContent(contentItem._id.toString(), user.userId).catch((err) =>
-          console.error("Background AI processing failed:", err)
-        )
+      await processContent(contentItem._id.toString(), user.userId).catch((err) =>
+        console.error("Background AI processing failed:", err)
       );
     }
 

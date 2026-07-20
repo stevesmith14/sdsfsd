@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import mongoose from "mongoose";
 import { connectDB } from "@/lib/db/mongoose";
 import ContentItem from "@/lib/db/models/ContentItem";
 import { requireAuth } from "@/lib/auth/middleware";
@@ -15,19 +16,45 @@ export async function GET(req: NextRequest) {
   try {
     await connectDB();
 
-    // Use MongoDB distinct to get all unique categories currently in use by the user
-    // We only want active items' categories
-    const categories = await ContentItem.distinct("category", { 
-      userId: user.userId,
-      status: "active" 
-    });
+    // Use MongoDB aggregation to get categories with item counts
+    const categoriesWithCounts = await ContentItem.aggregate([
+      {
+        $match: {
+          userId: new mongoose.Types.ObjectId(user.userId),
+          status: "active",
+          category: { $exists: true, $ne: "" },
+        },
+      },
+      {
+        $group: {
+          _id: "$category",
+          count: { $sum: 1 },
+          lastUsed: { $max: "$createdAt" },
+        },
+      },
+      {
+        $sort: { count: -1 }, // Sort by most used first
+      },
+    ]);
 
-    // Ensure they are strictly strings and not empty
-    const uniqueCategories = categories.filter((c) => typeof c === "string" && c.trim().length > 0);
+    // Backward-compatible flat list
+    const uniqueCategories = categoriesWithCounts
+      .map((c) => c._id)
+      .filter((c) => typeof c === "string" && c.trim().length > 0);
+
+    // Enriched list with counts
+    const enrichedCategories = categoriesWithCounts
+      .filter((c) => typeof c._id === "string" && c._id.trim().length > 0)
+      .map((c) => ({
+        name: c._id,
+        count: c.count,
+        lastUsed: c.lastUsed,
+      }));
 
     return NextResponse.json({
       success: true,
-      data: uniqueCategories,
+      data: uniqueCategories, // backward compatible
+      categories: enrichedCategories, // new enriched data
     });
   } catch (err) {
     console.error("GET /api/categories error:", err);

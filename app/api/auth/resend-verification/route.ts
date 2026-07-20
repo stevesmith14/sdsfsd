@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db/mongoose";
 import User from "@/lib/db/models/User";
+import PendingUser from "@/lib/db/models/PendingUser";
 import { generateEmailVerificationToken } from "@/lib/auth/emailVerification";
-import { getAppBaseUrl, getResendClient } from "@/lib/email/resend";
+import { getAppBaseUrl, sendEmail } from "@/lib/email/resend";
 import { verificationEmailTemplate } from "@/lib/email/templates";
 
 export async function POST(req: NextRequest) {
@@ -14,43 +15,47 @@ export async function POST(req: NextRequest) {
     }
 
     await connectDB();
-    const user = await User.findOne({ email });
-    // Do not leak whether email exists
-    if (!user) {
-      return NextResponse.json({ success: true, message: "If the email exists, a verification link was sent." });
-    }
-
-    if (user.emailVerified) {
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
       return NextResponse.json({ success: true, message: "Email already verified." });
     }
 
-    // Basic anti-spam: only allow resend every 2 minutes
-    if (user.emailVerificationExpiresAt) {
-      const ageMs = Date.now() - (user.emailVerificationExpiresAt.getTime() - 1000 * 60 * 60);
-      if (ageMs < 1000 * 60 * 2) {
-        return NextResponse.json(
-          { success: false, error: "Please wait before requesting another email." },
-          { status: 429 }
-        );
-      }
+    const pendingUser = await PendingUser.findOne({ email });
+    // Do not leak whether email exists
+    if (!pendingUser) {
+      return NextResponse.json({ success: true, message: "If the email exists, a verification link was sent." });
+    }
+
+    // Basic anti-spam: only allow resend every 45 seconds
+    const now = new Date();
+    const ageMs = 1000 * 60 * 60 - (pendingUser.expiresAt.getTime() - now.getTime());
+    if (ageMs < 1000 * 45) {
+      return NextResponse.json(
+        { success: false, error: "Please wait 45 seconds before requesting another email." },
+        { status: 429 }
+      );
     }
 
     const { token, tokenHash, expiresAt } = generateEmailVerificationToken();
-    user.emailVerificationTokenHash = tokenHash;
-    user.emailVerificationExpiresAt = expiresAt;
-    await user.save();
+    pendingUser.verificationTokenHash = tokenHash;
+    pendingUser.expiresAt = expiresAt;
+    await pendingUser.save();
 
     const baseUrl = getAppBaseUrl();
     const verifyUrl = `${baseUrl}/verify-email?token=${token}`;
-    const tpl = verificationEmailTemplate({ name: user.name, verifyUrl });
-    const resend = getResendClient();
-    await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || "AI Memory Engine <onboarding@resend.dev>",
-      to: user.email,
-      subject: tpl.subject,
-      html: tpl.html,
-      text: tpl.text,
-    });
+    const tpl = verificationEmailTemplate({ name: pendingUser.name, verifyUrl });
+    
+    try {
+      await sendEmail({
+        to: pendingUser.email,
+        subject: tpl.subject,
+        html: tpl.html,
+        text: tpl.text,
+      });
+      console.log("Email sent successfully!");
+    } catch (emailResult: any) {
+      console.error("Email Error details:", emailResult);
+    }
 
     return NextResponse.json({ success: true, message: "If the email exists, a verification link was sent." });
   } catch (err) {

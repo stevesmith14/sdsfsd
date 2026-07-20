@@ -12,6 +12,6 @@ export function verifyToken(token: string): any {
   try {
     return jwt.verify(token, SECRET);
   } catch (err) {
-    console.log("error in verify route :", err);
+    console.error("error in verify route :", err);
   }
 }
